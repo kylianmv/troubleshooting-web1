@@ -37,7 +37,7 @@ Le diagnostic a révélé que les démons (services) essentiels n'étaient pas d
 
 Pour rétablir le service, une procédure de démarrage séquentiel des services a été appliquée.
 
-### Étape 1 : Démarrage de l'infrastructure réseau (DHCP & DNS)
+### 1. Démarrage de l'infrastructure réseau (DHCP & DNS)
 Lancement des services sur les serveurs d'infrastructure pour rétablir la connectivité et la résolution de noms.
 
 * **Sur la machine `dhcp` :**
@@ -50,7 +50,7 @@ Lancement des services sur les serveurs d'infrastructure pour rétablir la conne
     systemctl start bind9
     ```
 
-### Étape 2 : Démarrage du serveur Web
+### 2. Démarrage du serveur Web
 Lancement du serveur Apache pour servir la page intranet.
 
 * **Sur la machine `www` :**
@@ -76,3 +76,42 @@ Une fois les services redémarrés, un test de validation a été effectué depu
 
 
 Le service intranet est désormais pleinement opérationnel.
+
+
+## 3. Description de l'Incident
+
+### Symptômes observés
+L'accès au site web `http://blog.woodytoys.lab` est lent ou échoue (Time out), alors que la résolution de nom semble fonctionner.
+
+### Analyse de la trace réseau (Wireshark)
+Une capture de paquets a été réalisée sur le client pour comprendre l'échec de la connexion TCP.
+
+![Trace Wireshark](wireshark.png)
+
+**Observations critiques :**
+1.  **DNS OK (Trames 1-2) :** La résolution DNS fonctionne correctement. Le serveur `192.168.0.2` renvoie bien l'IP `192.168.0.4` pour le serveur Web.
+2.  **TCP Retransmission (Trames 3, 7, 9) :** Le client tente d'initier une connexion TCP (SYN) vers le serveur Web mais ne reçoit pas d'accusé de réception (ACK) correct à temps.
+3.  **ICMP Redirect (Trames 4, 8, 11) :** Le serveur DNS (`192.168.0.2`) envoie des alertes de redirection au client.
+
+---
+
+## 4. Diagnostic (Root Cause)
+
+La présence des paquets **ICMP Redirect** provenant de `192.168.0.2` indique une anomalie de routage côté client.
+
+* **Le problème :** Le client envoie les paquets destinés au serveur Web (`192.168.0.4`) vers le serveur DNS (`192.168.0.2`) au lieu de les envoyer directement sur le réseau local ou via la bonne passerelle.
+* **La cause :** Une mauvaise configuration distribuée par le serveur DHCP. Le serveur DHCP a probablement configuré le client avec :
+    * Soit une **Passerelle par défaut (Router)** pointant vers `192.168.0.2` (le DNS) au lieu de `192.168.0.254` (le Routeur).
+    * Soit un **Masque de sous-réseau (Netmask)** incorrect (ex: `/32` au lieu de `/24`), forçant le client à passer par une passerelle pour joindre ses voisins directs.
+
+---
+
+## 5. Solution Mise en Œuvre
+
+Correction de la configuration du serveur DHCP pour distribuer les bons paramètres de routage.
+
+### Étape 1 : Correction du fichier dhcpd.conf
+Sur la machine `dhcp` (`192.168.0.1`), édition du fichier de configuration :
+
+```bash
+nano /etc/dhcp/dhcpd.conf
