@@ -66,12 +66,13 @@ Une fois les services redémarrés, un test de validation a été effectué depu
 
 * **Commande de test :**
     ```bash
-    links [http://www.woodytoys.lab](http://www.woodytoys.lab)
+    links "http://www.woodytoys.lab"
     ```
 
 * **Résultat obtenu :**
     La page d'accueil s'affiche correctement avec le message "Bienvenue!".
 
 ![Preuve de fonctionnement](fonctionne.png)
+
 
 Le service intranet est désormais pleinement opérationnel.
